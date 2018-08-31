@@ -1,0 +1,314 @@
+<h1 id="instant-lead-alerts">Instant Lead Alerts</h1>
+<h3 id="min-build-time">⏱ 15 min build time</h3>
+<h2 id="why-build-instant-lead-alerts-for-sales">Why build instant lead alerts for Sales?</h2>
+<p>Even though a lot of business transactions happen on the web, from both a business and user perspective, it’s still often preferred to switch the channel and talk on the phone. Especially when it comes to high-value transactions in industries such as real estate or mobility, personal contact is essential.</p>
+<p>One way to streamline this workflow is by building callback forms onto your website. Through these forms, customers can enter their contact details and receive a call to their phone, thus skipping queues where prospective leads need to stay on hold.</p>
+<p>Callback requests reflect a high level of purchase intent and should be dealt with as soon as possible to increase the chance of converting a lead. Therefore it’s paramount to get them pushed to a sales agent as quickly as possible. SMS messaging has proven to be one of the most instant and effective channels for this use case.</p>
+<p>In this MessageBird Developer Guide, we’ll show you how to implement a callback form on a Go web application with SMS integration powered by MessageBird for our fictitious car dealership, M.B. Cars.</p>
+<h2 id="getting-started">Getting Started</h2>
+<p>The sample application we’re about to build is built in Go. You can download or clone the complete source code from the <a href="https://github.com/messagebirdguides/lead-alerts-guide">MessageBird Developer Guides GitHub repository</a> to run the application on your computer and follow along with the guide. To run the sample, you need to have <a href="https://golang.org">Go installed</a> on your machine.</p>
+<p>We’ll also need the <a href="https://github.com/messagebird/go-rest-api">MessageBird REST API package for Go</a>. After you’ve installed Go, run the following command to install the MessageBird REST API package for Go:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="ex">go</span> get -u github.com/messagebird/go-rest-api</a></code></pre></div>
+<h3 id="dependencies">Dependencies</h3>
+<p>To keep things straightforward and get you up and running as fast as possible, we’ll use only packages from the Go standard library and the MessageBird REST API package for Go.</p>
+<h3 id="create-your-api-key">Create your API Key 🔑</h3>
+<p>To enable the MessageBird SDK, we need to provide an access key for the API. MessageBird provides keys in <em>live</em> and <em>test</em> modes. To get this application running, we will need to create and use a live API access key. Read more about the difference between test and live API keys <a href="https://support.messagebird.com/hc/en-us/articles/360000670709-What-is-the-difference-between-a-live-key-and-a-test-key-">here</a>.</p>
+<p>Let’s create your live API access key. First, go to the <a href="https://dashboard.messagebird.com/en/user/index">MessageBird Dashboard</a>; if you have already created an API key it will be shown right there. If you do not see any key on the dashboard or if you’re unsure whether this key is in <em>live</em> mode, go to the <em>Developers</em> section and open the <a href="https://dashboard.messagebird.com/en/developers/access">API access (REST) tab</a>. Here, you can create new API keys and manage your existing ones.</p>
+<p>If you are having any issues creating your API key, please reach out to our Customer Support team at support@messagebird.com.</p>
+<p><strong>Pro-tip:</strong> To keep our demonstration code simple, we will be saving our API key in <code>main.go</code>. However, hardcoding your credentials in the code is a risky practice that should never be used in production applications. A better method, also recommended by the <a href="https://12factor.net/">Twelve-Factor App Definition</a>, is to use environment variables. You can use open source packages such as <a href="https://github.com/joho/godotenv">GoDotEnv</a> to read your API key from a <code>.env</code> file into your Go application. Your <code>.env</code> file should be written as follows:</p>
+<pre class="env"><code>MESSAGEBIRD_API_KEY=YOUR-API-KEY</code></pre>
+<p>To use <a href="https://github.com/joho/godotenv">GoDotEnv</a> in your application, install it by running:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb3-1" data-line-number="1"><span class="ex">go</span> get -u github.com/joho/godotenv</a></code></pre></div>
+<p>Then, import it in your application:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb4-1" data-line-number="1"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="cb4-2" data-line-number="2">  <span class="co">// Other imported packages</span></a>
+<a class="sourceLine" id="cb4-3" data-line-number="3">  <span class="st">&quot;os&quot;</span></a>
+<a class="sourceLine" id="cb4-4" data-line-number="4"></a>
+<a class="sourceLine" id="cb4-5" data-line-number="5">  <span class="st">&quot;github.com/joho/godotenv&quot;</span></a>
+<a class="sourceLine" id="cb4-6" data-line-number="6">)</a>
+<a class="sourceLine" id="cb4-7" data-line-number="7"></a>
+<a class="sourceLine" id="cb4-8" data-line-number="8"><span class="kw">func</span> main(){</a>
+<a class="sourceLine" id="cb4-9" data-line-number="9">  <span class="co">// GoDotEnv loads any &quot;.env&quot; file located in the same directory as main.go</span></a>
+<a class="sourceLine" id="cb4-10" data-line-number="10">  err := godotenv.Load()</a>
+<a class="sourceLine" id="cb4-11" data-line-number="11">  <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb4-12" data-line-number="12">    log.Fatal(<span class="st">&quot;Error loading .env file&quot;</span>)</a>
+<a class="sourceLine" id="cb4-13" data-line-number="13">  }</a>
+<a class="sourceLine" id="cb4-14" data-line-number="14"></a>
+<a class="sourceLine" id="cb4-15" data-line-number="15">  <span class="co">// Store the value for the key &quot;MESSAGEBIRD_API_KEY&quot; in the loaded &#39;.env&#39; file.</span></a>
+<a class="sourceLine" id="cb4-16" data-line-number="16">  apikey := os.Getenv(<span class="st">&quot;MESSAGEBIRD_API_KEY&quot;</span>)</a>
+<a class="sourceLine" id="cb4-17" data-line-number="17"></a>
+<a class="sourceLine" id="cb4-18" data-line-number="18">  <span class="co">// The rest of your application ...</span></a>
+<a class="sourceLine" id="cb4-19" data-line-number="19">}</a></code></pre></div>
+<h3 id="initialize-the-messagebird-client">Initialize the MessageBird Client</h3>
+<p>Let’s now install the <a href="https://github.com/messagebird/go-rest-api">MessageBird’s REST API package for Go</a> by running:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb5-1" data-line-number="1"><span class="kw">go</span> get -u github.com/messagebird/<span class="kw">go</span>-rest-api</a></code></pre></div>
+<p>In your project folder which we created earlier, let’s create a <code>main.go</code> file, and write the following code:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb6-1" data-line-number="1"><span class="kw">package</span> main</a>
+<a class="sourceLine" id="cb6-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb6-3" data-line-number="3"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="cb6-4" data-line-number="4">  <span class="st">&quot;os&quot;</span></a>
+<a class="sourceLine" id="cb6-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb6-6" data-line-number="6">  <span class="st">&quot;github.com/messagebird/go-rest-api&quot;</span></a>
+<a class="sourceLine" id="cb6-7" data-line-number="7">)</a>
+<a class="sourceLine" id="cb6-8" data-line-number="8"></a>
+<a class="sourceLine" id="cb6-9" data-line-number="9"><span class="kw">var</span> client *messagebird.Client</a>
+<a class="sourceLine" id="cb6-10" data-line-number="10"></a>
+<a class="sourceLine" id="cb6-11" data-line-number="11"><span class="kw">func</span> main(){</a>
+<a class="sourceLine" id="cb6-12" data-line-number="12">  client := messagebird.New(<span class="st">&quot;&lt;enter-your-api-key&gt;&quot;</span>)</a>
+<a class="sourceLine" id="cb6-13" data-line-number="13">}</a></code></pre></div>
+<h3 id="routes">Routes</h3>
+<p>To make the structure of our web application clear, we’ll first stub the routes that we need. We need two routes:</p>
+<ul>
+<li>A route to ask for the user’s name and phone number, so that our agent can contact them.</li>
+<li>A route to display a success state.</li>
+</ul>
+<p>To write these routes, we need to modify <code>main.go</code> to look like the following:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb7-1" data-line-number="1"><span class="kw">package</span> main</a>
+<a class="sourceLine" id="cb7-2" data-line-number="2"></a>
+<a class="sourceLine" id="cb7-3" data-line-number="3"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="cb7-4" data-line-number="4">  <span class="st">&quot;fmt&quot;</span></a>
+<a class="sourceLine" id="cb7-5" data-line-number="5">  <span class="st">&quot;net/http&quot;</span></a>
+<a class="sourceLine" id="cb7-6" data-line-number="6"></a>
+<a class="sourceLine" id="cb7-7" data-line-number="7">  <span class="st">&quot;github.com/messagebird/go-rest-api&quot;</span></a>
+<a class="sourceLine" id="cb7-8" data-line-number="8">)</a>
+<a class="sourceLine" id="cb7-9" data-line-number="9"></a>
+<a class="sourceLine" id="cb7-10" data-line-number="10"><span class="kw">func</span> landing(w http.ResponseWriter, r *http.Request){</a>
+<a class="sourceLine" id="cb7-11" data-line-number="11">  <span class="co">// Do nothing</span></a>
+<a class="sourceLine" id="cb7-12" data-line-number="12">  fmt.Fprintln(<span class="st">&quot;We ask for the user&#39;s phone number here.&quot;</span>)</a>
+<a class="sourceLine" id="cb7-13" data-line-number="13">}</a>
+<a class="sourceLine" id="cb7-14" data-line-number="14"></a>
+<a class="sourceLine" id="cb7-15" data-line-number="15"><span class="kw">func</span> callme(w http.ResponseWriter, r *http.Request){</a>
+<a class="sourceLine" id="cb7-16" data-line-number="16">  <span class="co">// Do nothing</span></a>
+<a class="sourceLine" id="cb7-17" data-line-number="17">  fmt.Fprintln(<span class="st">&quot;We display a success state here.&quot;</span>)</a>
+<a class="sourceLine" id="cb7-18" data-line-number="18">}</a>
+<a class="sourceLine" id="cb7-19" data-line-number="19"></a>
+<a class="sourceLine" id="cb7-20" data-line-number="20"><span class="kw">func</span> main() {</a>
+<a class="sourceLine" id="cb7-21" data-line-number="21">    client = messagebird.New(<span class="st">&quot;&lt;enter-your-api-key&gt;&quot;</span>)</a>
+<a class="sourceLine" id="cb7-22" data-line-number="22"></a>
+<a class="sourceLine" id="cb7-23" data-line-number="23">    <span class="co">// Routes</span></a>
+<a class="sourceLine" id="cb7-24" data-line-number="24">    http.HandleFunc(<span class="st">&quot;/&quot;</span>, landing)</a>
+<a class="sourceLine" id="cb7-25" data-line-number="25">    http.HandleFunc(<span class="st">&quot;/callme&quot;</span>, callme)</a>
+<a class="sourceLine" id="cb7-26" data-line-number="26"></a>
+<a class="sourceLine" id="cb7-27" data-line-number="27">    <span class="co">// Serve</span></a>
+<a class="sourceLine" id="cb7-28" data-line-number="28">    port := <span class="st">&quot;:8080&quot;</span></a>
+<a class="sourceLine" id="cb7-29" data-line-number="29">    log.Println(<span class="st">&quot;Serving application on&quot;</span>, port)</a>
+<a class="sourceLine" id="cb7-30" data-line-number="30">    err := http.ListenAndServe(port, <span class="ot">nil</span>)</a>
+<a class="sourceLine" id="cb7-31" data-line-number="31">    <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb7-32" data-line-number="32">        log.Println(err)</a>
+<a class="sourceLine" id="cb7-33" data-line-number="33">    }</a>
+<a class="sourceLine" id="cb7-34" data-line-number="34">}</a></code></pre></div>
+<p>Here, we’ve defined a HTTP handler for each route, and assigned each handler to a corresponding URL path. At the bottom of our <code>main()</code> function, we start a HTTP server on port 8080.</p>
+<p><strong>Pro-tip:</strong> We use <code>http.ListenAndServe</code> to start our HTTP server here, but you may want to use <code>http.ListenAndServeTLS</code> to secure your application’s communication over the web with TLS/SSL.</p>
+<h3 id="views">Views</h3>
+<p>Now that we’ve got our routes set up, we can start writing templates to render for each route. Let’s create the template files for rendering views in your project folder:</p>
+<ul>
+<li><code>views/layouts/default.gohtml</code>: The base HTML template we will use with all our views.</li>
+<li><code>views/start.gohtml</code>: Our landing page that takes user input.</li>
+<li><code>views/callme.gohtml</code>: Displays a success state.</li>
+</ul>
+<p>The <code>.gohtml</code> files will contain our Go HTML template code for each of our views, and our “default” base template.</p>
+<p>First, we’ll write the base template. In <code>default.gohtml</code>, write the following code:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode html"><code class="sourceCode html"><a class="sourceLine" id="cb8-1" data-line-number="1">{{ define &quot;default&quot; }}</a>
+<a class="sourceLine" id="cb8-2" data-line-number="2"><span class="dt">&lt;!DOCTYPE </span>html<span class="dt">&gt;</span></a>
+<a class="sourceLine" id="cb8-3" data-line-number="3">  <span class="kw">&lt;head&gt;</span></a>
+<a class="sourceLine" id="cb8-4" data-line-number="4">    <span class="kw">&lt;meta</span><span class="ot"> charset=</span><span class="st">&quot;utf-8&quot;</span><span class="kw">&gt;</span></a>
+<a class="sourceLine" id="cb8-5" data-line-number="5">    <span class="kw">&lt;meta</span><span class="ot"> http-equiv=</span><span class="st">&quot;X-UA-Compatible&quot;</span><span class="ot"> content=</span><span class="st">&quot;IE=edge&quot;</span><span class="kw">&gt;</span></a>
+<a class="sourceLine" id="cb8-6" data-line-number="6">    <span class="kw">&lt;title&gt;</span>MessageBird Verify Example<span class="kw">&lt;/title&gt;</span></a>
+<a class="sourceLine" id="cb8-7" data-line-number="7">    <span class="kw">&lt;meta</span><span class="ot"> name=</span><span class="st">&quot;description&quot;</span><span class="ot"> content=</span><span class="st">&quot;&quot;</span><span class="kw">&gt;</span></a>
+<a class="sourceLine" id="cb8-8" data-line-number="8">    <span class="kw">&lt;meta</span><span class="ot"> name=</span><span class="st">&quot;viewport&quot;</span><span class="ot"> content=</span><span class="st">&quot;width=device-width, initial-scale=1&quot;</span><span class="kw">&gt;</span></a>
+<a class="sourceLine" id="cb8-9" data-line-number="9">    <span class="kw">&lt;link</span><span class="ot"> rel=</span><span class="st">&quot;stylesheet&quot;</span><span class="ot"> href=</span><span class="st">&quot;&quot;</span><span class="ot"> type=</span><span class="st">&quot;text/css&quot;</span><span class="kw">/&gt;</span></a>
+<a class="sourceLine" id="cb8-10" data-line-number="10">  <span class="kw">&lt;/head&gt;</span></a>
+<a class="sourceLine" id="cb8-11" data-line-number="11">  <span class="kw">&lt;body&gt;</span></a>
+<a class="sourceLine" id="cb8-12" data-line-number="12">    <span class="kw">&lt;main&gt;</span></a>
+<a class="sourceLine" id="cb8-13" data-line-number="13">    <span class="kw">&lt;h1&gt;</span>M.B. Cars 🚙<span class="kw">&lt;/h1&gt;</span></a>
+<a class="sourceLine" id="cb8-14" data-line-number="14">    <span class="kw">&lt;h2&gt;</span>Largest Car Dealership in Town!<span class="kw">&lt;/h2&gt;</span></a>
+<a class="sourceLine" id="cb8-15" data-line-number="15">    <span class="kw">&lt;h3&gt;</span>We buy <span class="dv">&amp;amp;</span> sell all international brands.<span class="kw">&lt;/h3&gt;</span></a>
+<a class="sourceLine" id="cb8-16" data-line-number="16">    {{ template &quot;yield&quot; . }}</a>
+<a class="sourceLine" id="cb8-17" data-line-number="17">    <span class="kw">&lt;p&gt;&lt;small&gt;</span>A sample application brought to you by <span class="kw">&lt;a</span><span class="ot"> href=</span><span class="st">&quot;https://developers.messagebird.com/&quot;</span><span class="kw">&gt;</span>MessageBird<span class="kw">&lt;/a&gt;</span> :)<span class="kw">&lt;/small&gt;&lt;/p&gt;</span></a>
+<a class="sourceLine" id="cb8-18" data-line-number="18">    <span class="kw">&lt;/main&gt;</span></a>
+<a class="sourceLine" id="cb8-19" data-line-number="19">  <span class="kw">&lt;/body&gt;</span></a>
+<a class="sourceLine" id="cb8-20" data-line-number="20"><span class="kw">&lt;/html&gt;</span></a>
+<a class="sourceLine" id="cb8-21" data-line-number="21">{{ end }}</a></code></pre></div>
+<p>Notice that in <code>default.gohtml</code>, we are calling <code>{{ template &quot;yield&quot; . }}</code>. This tells the Go templates package that the contents of any template named “yield” should be rendered in its place when the template is executed.</p>
+<h2 id="writing-a-renderdefaulttemplate-function">Writing a RenderDefaultTemplate() function</h2>
+<p>Let’s write a helper function to help us render our views. At this point, we know that the handlers for our views must:</p>
+<ul>
+<li>Parse the <code>default.gohtml</code> template file and one other template file.</li>
+<li>Execute the template.</li>
+<li>Handle errors from the <code>ParseFiles()</code> and <code>ExecuteTemplate()</code> methods.</li>
+<li>Display an error message if we have one.</li>
+</ul>
+<p>We can write a <code>RenderDefaultTemplate()</code> helper function to make these calls, keeping our code DRY:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="kw">func</span> RenderDefaultTemplate(w http.ResponseWriter, thisView <span class="dt">string</span>, data <span class="kw">interface</span>{}) {</a>
+<a class="sourceLine" id="cb9-2" data-line-number="2">  renderthis := []<span class="dt">string</span>{thisView, <span class="st">&quot;views/layouts/default.gohtml&quot;</span>}</a>
+<a class="sourceLine" id="cb9-3" data-line-number="3">  t, err := template.ParseFiles(renderthis...)</a>
+<a class="sourceLine" id="cb9-4" data-line-number="4">  <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb9-5" data-line-number="5">    log.Fatal(err)</a>
+<a class="sourceLine" id="cb9-6" data-line-number="6">  }</a>
+<a class="sourceLine" id="cb9-7" data-line-number="7">  err = t.ExecuteTemplate(w, <span class="st">&quot;default&quot;</span>, data)</a>
+<a class="sourceLine" id="cb9-8" data-line-number="8">  <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb9-9" data-line-number="9">    log.Fatal(err)</a>
+<a class="sourceLine" id="cb9-10" data-line-number="10">  }</a>
+<a class="sourceLine" id="cb9-11" data-line-number="11">}</a></code></pre></div>
+<p>Then, we can go ahead and rewrite all our handlers in <code>main.go</code>:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb10-1" data-line-number="1"><span class="kw">func</span> landing(w http.ResponseWriter, r *http.Request){</a>
+<a class="sourceLine" id="cb10-2" data-line-number="2">  RenderDefaultTemplate(w,<span class="st">&quot;views/landing.gohtml&quot;</span>, <span class="ot">nil</span>)</a>
+<a class="sourceLine" id="cb10-3" data-line-number="3">}</a>
+<a class="sourceLine" id="cb10-4" data-line-number="4"></a>
+<a class="sourceLine" id="cb10-5" data-line-number="5"><span class="kw">func</span> callme(w http.ResponseWriter, r *http.Request){</a>
+<a class="sourceLine" id="cb10-6" data-line-number="6">  RenderDefaultTemplate(w,<span class="st">&quot;views/callme.gohtml&quot;</span>, <span class="ot">nil</span>)</a>
+<a class="sourceLine" id="cb10-7" data-line-number="7">}</a></code></pre></div>
+<p>Finally, remember to add the <code>template/html</code> package to your <code>import</code> statement:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb11-1" data-line-number="1"><span class="kw">import</span> (</a>
+<a class="sourceLine" id="cb11-2" data-line-number="2">  <span class="st">&quot;fmt&quot;</span></a>
+<a class="sourceLine" id="cb11-3" data-line-number="3">  <span class="st">&quot;net/http&quot;</span></a>
+<a class="sourceLine" id="cb11-4" data-line-number="4">  <span class="st">&quot;html/template&quot;</span></a>
+<a class="sourceLine" id="cb11-5" data-line-number="5"></a>
+<a class="sourceLine" id="cb11-6" data-line-number="6">  <span class="st">&quot;github.com/messagebird/go-rest-api&quot;</span></a>
+<a class="sourceLine" id="cb11-7" data-line-number="7">)</a></code></pre></div>
+<h2 id="showing-a-landing-page">Showing a Landing Page</h2>
+<p>The landing page is a simple HTML page with information about our company, a call to action and a form with two input fields, name and number, and a submit button. All this page does is to take the name and phone number entered by the user and submits a “POST” request to the <code>/callme</code> route.</p>
+<p>In <code>landing.gohtml</code>, let’s write the following code:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode html"><code class="sourceCode html"><a class="sourceLine" id="cb12-1" data-line-number="1">{{ define &quot;yield&quot; }}</a>
+<a class="sourceLine" id="cb12-2" data-line-number="2"><span class="kw">&lt;h4&gt;</span>Leave your number here all talk to a sales agent within 5 minutes, guaranteed!<span class="kw">&lt;/h4&gt;</span></a>
+<a class="sourceLine" id="cb12-3" data-line-number="3"><span class="kw">&lt;div&gt;</span></a>
+<a class="sourceLine" id="cb12-4" data-line-number="4">  {{ if .Message }}</a>
+<a class="sourceLine" id="cb12-5" data-line-number="5">  <span class="kw">&lt;p&gt;&lt;strong&gt;</span>{{ .Message }}<span class="kw">&lt;/strong&gt;&lt;/p&gt;</span></a>
+<a class="sourceLine" id="cb12-6" data-line-number="6">  {{ end }}</a>
+<a class="sourceLine" id="cb12-7" data-line-number="7">  <span class="kw">&lt;form</span><span class="ot"> action=</span><span class="st">&quot;/callme&quot;</span><span class="ot"> method=</span><span class="st">&quot;post&quot;</span><span class="kw">&gt;</span></a>
+<a class="sourceLine" id="cb12-8" data-line-number="8">      <span class="kw">&lt;div&gt;</span></a>
+<a class="sourceLine" id="cb12-9" data-line-number="9">          <span class="kw">&lt;label&gt;</span>Your name:<span class="kw">&lt;/label&gt;</span></a>
+<a class="sourceLine" id="cb12-10" data-line-number="10">          <span class="kw">&lt;br</span> <span class="kw">/&gt;</span></a>
+<a class="sourceLine" id="cb12-11" data-line-number="11">          <span class="kw">&lt;input</span><span class="ot"> type=</span><span class="st">&quot;text&quot;</span><span class="ot"> name=</span><span class="st">&quot;name&quot;</span> </a>
+<a class="sourceLine" id="cb12-12" data-line-number="12"><span class="ot">          value=</span><span class="st">&quot;{{ if .Name }}{{ .Name }}{{ end }}&quot;</span><span class="ot"> placeholder=</span><span class="st">&quot;Birdie&quot;</span><span class="ot"> required</span><span class="kw">/&gt;</span></a>
+<a class="sourceLine" id="cb12-13" data-line-number="13">      <span class="kw">&lt;/div&gt;</span></a>
+<a class="sourceLine" id="cb12-14" data-line-number="14">      <span class="kw">&lt;div&gt;</span></a>
+<a class="sourceLine" id="cb12-15" data-line-number="15">          <span class="kw">&lt;label&gt;</span>Your phone number:<span class="kw">&lt;/label&gt;</span></a>
+<a class="sourceLine" id="cb12-16" data-line-number="16">          <span class="kw">&lt;br</span> <span class="kw">/&gt;</span></a>
+<a class="sourceLine" id="cb12-17" data-line-number="17">          <span class="kw">&lt;input</span><span class="ot"> type=</span><span class="st">&quot;tel&quot;</span><span class="ot"> name=</span><span class="st">&quot;phone&quot;</span> </a>
+<a class="sourceLine" id="cb12-18" data-line-number="18"><span class="ot">          value=</span><span class="st">&quot;{{ if .Phone }}{{ .Phone }}{{ end }}&quot;</span><span class="ot"> placeholder=</span><span class="st">&quot;+319876543210&quot;</span><span class="ot"> required</span><span class="kw">/&gt;</span></a>
+<a class="sourceLine" id="cb12-19" data-line-number="19">      <span class="kw">&lt;/div&gt;</span></a>
+<a class="sourceLine" id="cb12-20" data-line-number="20">      <span class="kw">&lt;div&gt;</span></a>
+<a class="sourceLine" id="cb12-21" data-line-number="21">          <span class="kw">&lt;button</span><span class="ot"> type=</span><span class="st">&quot;submit&quot;</span><span class="kw">&gt;</span>Call me<span class="kw">&lt;/button&gt;</span></a>
+<a class="sourceLine" id="cb12-22" data-line-number="22">      <span class="kw">&lt;/div&gt;</span>        </a>
+<a class="sourceLine" id="cb12-23" data-line-number="23">  <span class="kw">&lt;/form&gt;</span></a>
+<a class="sourceLine" id="cb12-24" data-line-number="24"><span class="kw">&lt;/div&gt;</span></a>
+<a class="sourceLine" id="cb12-25" data-line-number="25">{{ end }}</a></code></pre></div>
+<h2 id="handling-callback-requests">Handling Callback Requests</h2>
+<p>When the user submits the form, the <code>/callme</code> route receives their name and number. We then randomly assign an agent to call the user to follow up. We’ll assume that we have a list of agent’s phone numbers in a <code>contacts.csv</code> file, and that we’ll pick a phone number from this list at random to send an SMS message to ask the agent who owns that number to call the user.</p>
+<p>Our <code>contacts.csv</code> file should look like this:</p>
+<pre class="csv"><code>+319876543210,
++319876543211,
++319876543212,
++319876543213,
++319876543214,
++319876543215,
++319876543216,
++319876543217,
++319876543218,
++319876543219,
++319876543220,
++319876543221,
++319876543222,
++319876543223,
++319876543224,
++319876543225,
++319876543226,
++319876543227,
++319876543228,
++319876543229,</code></pre>
+<p><strong>Note</strong>: In order to send a message to a phone number, that phone number must have been added to your MessageBird contact list. See the <a href="https://developers.messagebird.com/docs/contacts">MessageBird API Reference</a> for more information.</p>
+<p>To load the <code>contacts.csv</code> file, add the following code under <code>RenderDefaultTemplate()</code> in <code>main.go</code>:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb14-1" data-line-number="1"><span class="co">// getPhoneList reads a single column CSV file as a list of contacts, and</span></a>
+<a class="sourceLine" id="cb14-2" data-line-number="2"><span class="co">// returns its contents as a map of &quot;int: string&quot;</span></a>
+<a class="sourceLine" id="cb14-3" data-line-number="3"><span class="kw">func</span> getPhoneList(file <span class="dt">string</span>) <span class="kw">map</span>[<span class="dt">int</span>]<span class="dt">string</span> {</a>
+<a class="sourceLine" id="cb14-4" data-line-number="4">    f, err := os.Open(file)</a>
+<a class="sourceLine" id="cb14-5" data-line-number="5">    <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb14-6" data-line-number="6">        log.Fatal(err)</a>
+<a class="sourceLine" id="cb14-7" data-line-number="7">    }</a>
+<a class="sourceLine" id="cb14-8" data-line-number="8">    <span class="kw">defer</span> f.Close()</a>
+<a class="sourceLine" id="cb14-9" data-line-number="9">    rows, err := csv.NewReader(f).ReadAll()</a>
+<a class="sourceLine" id="cb14-10" data-line-number="10">    <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb14-11" data-line-number="11">        log.Fatal(err)</a>
+<a class="sourceLine" id="cb14-12" data-line-number="12">    }</a>
+<a class="sourceLine" id="cb14-13" data-line-number="13">    phonelist := <span class="bu">make</span>(<span class="kw">map</span>[<span class="dt">int</span>]<span class="dt">string</span>)</a>
+<a class="sourceLine" id="cb14-14" data-line-number="14">    <span class="kw">for</span> i := <span class="kw">range</span> rows {</a>
+<a class="sourceLine" id="cb14-15" data-line-number="15">        phonelist[i] = rows[i][<span class="dv">0</span>]</a>
+<a class="sourceLine" id="cb14-16" data-line-number="16">    }</a>
+<a class="sourceLine" id="cb14-17" data-line-number="17">    <span class="kw">return</span> phonelist</a>
+<a class="sourceLine" id="cb14-18" data-line-number="18">}</a>
+<a class="sourceLine" id="cb14-19" data-line-number="19"></a>
+<a class="sourceLine" id="cb14-20" data-line-number="20"><span class="co">// getRandomContact picks a random key from a map[int]string and returns its value.</span></a>
+<a class="sourceLine" id="cb14-21" data-line-number="21"><span class="kw">func</span> getRandomContact(phonelist <span class="kw">map</span>[<span class="dt">int</span>]<span class="dt">string</span>) <span class="dt">string</span> {</a>
+<a class="sourceLine" id="cb14-22" data-line-number="22">    rand.Seed(time.Now().Unix())</a>
+<a class="sourceLine" id="cb14-23" data-line-number="23">    <span class="kw">return</span> phonelist[rand.Intn(<span class="bu">len</span>(phonelist))]</a>
+<a class="sourceLine" id="cb14-24" data-line-number="24">}</a></code></pre></div>
+<p>And then add this line of code to the top of your <code>callme()</code> handler function:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb15-1" data-line-number="1">agentToCall := getRandomContact(getPhoneList(<span class="st">&quot;contacts.csv&quot;</span>))</a></code></pre></div>
+<p>Above, we’ve written two helper functions that work together to:</p>
+<ol type="1">
+<li>Load data from a given CSV file and returns it as a map. We’ll use this to load our <code>contacts.csv</code> file.</li>
+<li>Selects a random item from a map using its <code>key</code>, and return its value. We’ll use this to select a random agent’s contact number.</li>
+</ol>
+<p>Now we’re ready to write the rest of our <code>callme()</code> handler function. Modify <code>callme()</code> so that it looks like this:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb16-1" data-line-number="1"><span class="kw">func</span> callme(w http.ResponseWriter, r *http.Request) {</a>
+<a class="sourceLine" id="cb16-2" data-line-number="2">    r.ParseForm()</a>
+<a class="sourceLine" id="cb16-3" data-line-number="3">    msgBody := <span class="st">&quot;You have a new lead: &quot;</span> + r.FormValue(<span class="st">&quot;name&quot;</span>) + <span class="st">&quot;. Call them at &quot;</span> + r.FormValue(<span class="st">&quot;phone&quot;</span>)</a>
+<a class="sourceLine" id="cb16-4" data-line-number="4">    agentToCall := getRandomContact(getPhoneList(<span class="st">&quot;contacts.csv&quot;</span>))</a>
+<a class="sourceLine" id="cb16-5" data-line-number="5">    msg, err := sms.Create(</a>
+<a class="sourceLine" id="cb16-6" data-line-number="6">        client,</a>
+<a class="sourceLine" id="cb16-7" data-line-number="7">        <span class="st">&quot;MBCars&quot;</span>,</a>
+<a class="sourceLine" id="cb16-8" data-line-number="8">        []<span class="dt">string</span>{agentToCall},</a>
+<a class="sourceLine" id="cb16-9" data-line-number="9">        msgBody,</a>
+<a class="sourceLine" id="cb16-10" data-line-number="10">        <span class="ot">nil</span>,</a>
+<a class="sourceLine" id="cb16-11" data-line-number="11">    )</a>
+<a class="sourceLine" id="cb16-12" data-line-number="12">    <span class="kw">if</span> err != <span class="ot">nil</span> {</a>
+<a class="sourceLine" id="cb16-13" data-line-number="13">        log.Println(err)</a>
+<a class="sourceLine" id="cb16-14" data-line-number="14">        RenderDefaultTemplate(</a>
+<a class="sourceLine" id="cb16-15" data-line-number="15">            w,</a>
+<a class="sourceLine" id="cb16-16" data-line-number="16">            <span class="st">&quot;views/landing.gohtml&quot;</span>,</a>
+<a class="sourceLine" id="cb16-17" data-line-number="17">            &amp;Data{</a>
+<a class="sourceLine" id="cb16-18" data-line-number="18">                Name:    r.FormValue(<span class="st">&quot;name&quot;</span>),</a>
+<a class="sourceLine" id="cb16-19" data-line-number="19">                Phone:   r.FormValue(<span class="st">&quot;phone&quot;</span>),</a>
+<a class="sourceLine" id="cb16-20" data-line-number="20">                Message: <span class="st">&quot;We couldn&#39;t complete your request! Please try again.&quot;</span>,</a>
+<a class="sourceLine" id="cb16-21" data-line-number="21">            },</a>
+<a class="sourceLine" id="cb16-22" data-line-number="22">        )</a>
+<a class="sourceLine" id="cb16-23" data-line-number="23">        <span class="kw">return</span></a>
+<a class="sourceLine" id="cb16-24" data-line-number="24">    }</a>
+<a class="sourceLine" id="cb16-25" data-line-number="25">    <span class="co">// Logging msg for development. Can safely discard in production builds.</span></a>
+<a class="sourceLine" id="cb16-26" data-line-number="26">    log.Println(msg)</a>
+<a class="sourceLine" id="cb16-27" data-line-number="27">    RenderDefaultTemplate(w, <span class="st">&quot;views/sent.gohtml&quot;</span>, <span class="ot">nil</span>)</a>
+<a class="sourceLine" id="cb16-28" data-line-number="28">}</a></code></pre></div>
+<p>We’ll also need to define a <code>Data</code> struct type, which we use to pass an error message and other data to our <code>landing.gohtml</code> template:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><a class="sourceLine" id="cb17-1" data-line-number="1"><span class="co">// Data is for passing data to our templates</span></a>
+<a class="sourceLine" id="cb17-2" data-line-number="2"><span class="kw">type</span> Data <span class="kw">struct</span> {</a>
+<a class="sourceLine" id="cb17-3" data-line-number="3">    Name    <span class="dt">string</span></a>
+<a class="sourceLine" id="cb17-4" data-line-number="4">    Phone   <span class="dt">string</span></a>
+<a class="sourceLine" id="cb17-5" data-line-number="5">    Message <span class="dt">string</span></a>
+<a class="sourceLine" id="cb17-6" data-line-number="6">}</a></code></pre></div>
+<p>In our <code>callme()</code> handler function, we’re:</p>
+<ol type="1">
+<li>Parsing the form data submitted to the current route.</li>
+<li>Writing the message to send to the assigned agent, and assigning it to <code>msgBody</code>.</li>
+<li>Picking an agent to call at random, and assigning it to <code>agentToCall</code>.</li>
+<li>Sending an SMS message to the selected agent by calling <code>sms.Create()</code>.</li>
+<li>If <code>sms.Create()</code> returns an error, send the user back to the landing page and display and error.</li>
+<li>If we successfully send the message, display a success state.</li>
+</ol>
+<p>To send an SMS message to an agent, we make an <code>sms.Create()</code> call that takes four parameters:</p>
+<ul>
+<li><code>originator</code>: The sender ID. This is the name that appears as the sender of the SMS message.</li>
+<li><code>recipients</code>: The API supports an array of recipients; we’re sending to only one but this parameter is still specified as a <code>[]string</code>. We’re passing in our selected agent’s contact number here by writing it into a <code>[]string</code> literal: <code>[]string{agentToCall}</code>.</li>
+<li><code>body</code>: The text of the message that includes the input from the form.</li>
+<li><code>params</code>: Other message parameters that you can specify. Here, we’re leaving this as <code>nil</code>. See the <a href="https://developers.messagebird.com/docs">MessageBird API Reference</a> for more information.</li>
+</ul>
+<h2 id="testing-the-application">Testing the Application</h2>
+<p>You’re done! Make sure that you’ve replaced the API key in the sample code with your own, and you’re ready to assign leads to agents.</p>
+<p>To test your application, run the following command from your console:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode bash"><code class="sourceCode bash"><a class="sourceLine" id="cb18-1" data-line-number="1"><span class="ex">go</span> run main.go</a></code></pre></div>
+<p>Go to http://localhost:8080/ to see the form and request a lead!</p>
+<h2 id="nice-work">Nice work!</h2>
+<p>You’ve just built your own instant lead alerts application with MessageBird!</p>
+<p>You can now use the flow, code snippets and UI examples from this tutorial as an inspiration to build your own SMS-based lead alerts application. Don’t forget to download the code from the <a href="https://github.com/messagebirdguides/lead-alerts-guide">MessageBird Developer Guides GitHub repository</a>.</p>
+<h2 id="next-steps">Next steps</h2>
+<p>Want to build something similar but not quite sure how to get started? Please feel free to let us know at support@messagebird.com, we’d love to help!</p>

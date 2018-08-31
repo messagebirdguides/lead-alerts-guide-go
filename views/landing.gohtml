@@ -1,0 +1,25 @@
+{{ define "yield" }}
+<h4>Leave your number here all talk to a sales agent within 5 minutes, guaranteed!</h4>
+<div>
+  {{ if .Message }}
+  <p><strong>{{ .Message }}</strong></p>
+  {{ end }}
+  <form action="/callme" method="post">
+      <div>
+          <label>Your name:</label>
+          <br />
+          <input type="text" name="name" 
+          value="{{ if .Name }}{{ .Name }}{{ end }}" placeholder="Birdie" required/>
+      </div>
+      <div>
+          <label>Your phone number:</label>
+          <br />
+          <input type="tel" name="phone" 
+          value="{{ if .Phone }}{{ .Phone }}{{ end }}" placeholder="+319876543210" required/>
+      </div>
+      <div>
+          <button type="submit">Call me</button>
+      </div>        
+  </form>
+</div>
+{{ end }}
